@@ -6,6 +6,9 @@ import math
 import os
 import random
 from datetime import datetime  # Added for timestamp formatting
+import platform
+import sys
+import time
 
 # -------------------------------------------------------------------------
 # BACKEND LOGIC (The Maths & Algorithms)
@@ -221,20 +224,110 @@ class StegoEngine:
 # FRONTEND LOGIC (The GUI)
 # -------------------------------------------------------------------------
 
+class ThemeManager:
+    """Manages application themes and system theme detection."""
+    
+    # Dark Theme Colors
+    DARK_THEME = {
+        "BG_COLOR": "#0D1117",
+        "FG_COLOR": "#E6EDF3",
+        "ACCENT_COLOR": "#58A6FF",
+        "ACCENT_HOVER": "#79C0FF",
+        "SUCCESS_COLOR": "#3FB950",
+        "DANGER_COLOR": "#F85149",
+        "SECONDARY_BG": "#161B22",
+        "BORDER_COLOR": "#30363D"
+    }
+    
+    # Light Theme Colors
+    LIGHT_THEME = {
+        "BG_COLOR": "#FFFFFF",
+        "FG_COLOR": "#1F2937",
+        "ACCENT_COLOR": "#0066CC",
+        "ACCENT_HOVER": "#0052A3",
+        "SUCCESS_COLOR": "#10B981",
+        "DANGER_COLOR": "#EF4444",
+        "SECONDARY_BG": "#F3F4F6",
+        "BORDER_COLOR": "#D1D5DB"
+    }
+    
+    @staticmethod
+    def get_system_theme():
+        """Detect system theme preference. Returns 'dark' or 'light'."""
+        system = platform.system()
+        
+        if system == "Windows":
+            try:
+                import winreg
+                registry_path = r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
+                registry_key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, registry_path)
+                value, _ = winreg.QueryValueEx(registry_key, "AppsUseLightTheme")
+                winreg.CloseKey(registry_key)
+                return "light" if value == 1 else "dark"
+            except:
+                return "dark"  # Default to dark if detection fails
+        
+        elif system == "Darwin":  # macOS
+            try:
+                import subprocess
+                result = subprocess.run(['defaults', 'read', '-g', 'AppleInterfaceStyle'], 
+                                      capture_output=True, text=True)
+                return "dark" if "Dark" in result.stdout else "light"
+            except:
+                return "dark"
+        
+        elif system == "Linux":
+            # Linux theme detection is complex, default to dark
+            return "dark"
+        
+        return "dark"  # Fallback default
+
 class StegoApp:
     def __init__(self, root):
         self.root = root
         self.root.title("CyberMaths Steganography Tool")
         self.root.geometry("900x650")
         
+        # Detect and set system theme
+        system_theme = ThemeManager.get_system_theme()
+        self.is_dark_theme = system_theme == "dark"
+        self.current_theme = ThemeManager.DARK_THEME if self.is_dark_theme else ThemeManager.LIGHT_THEME
+        
+        # Set colors from theme
+        self.BG_COLOR = self.current_theme["BG_COLOR"]
+        self.FG_COLOR = self.current_theme["FG_COLOR"]
+        self.ACCENT_COLOR = self.current_theme["ACCENT_COLOR"]
+        self.ACCENT_HOVER = self.current_theme["ACCENT_HOVER"]
+        self.SUCCESS_COLOR = self.current_theme["SUCCESS_COLOR"]
+        self.DANGER_COLOR = self.current_theme["DANGER_COLOR"]
+        self.SECONDARY_BG = self.current_theme["SECONDARY_BG"]
+        self.BORDER_COLOR = self.current_theme["BORDER_COLOR"]
+        
+        # Apply theme to root
+        self.root.config(bg=self.BG_COLOR)
+        
         # Style
-        style = ttk.Style()
-        style.theme_use('clam')
+        self.style = ttk.Style()
+        self.style.theme_use('clam')
+        self._apply_theme_style()
         
         # --- Variables ---
         self.src_image_path = None
         self.stego_image_object = None
         self.decoded_image_path = None
+        
+        # --- Top Header with Theme Button ---
+        self.header_frame = tk.Frame(root, bg=self.SECONDARY_BG, height=40, highlightthickness=0)
+        self.header_frame.pack(fill="x", padx=0, pady=0)
+        self.header_frame.pack_propagate(False)
+        
+        # Theme button on the right with rounded appearance
+        self.theme_btn = tk.Button(self.header_frame, text="🎨 Theme", command=self._show_theme_menu, 
+                                   bg=self.ACCENT_COLOR, fg=self.FG_COLOR, font=("Arial", 10, "bold"),
+                                   relief="flat", padx=20, pady=10, cursor="hand2",
+                                   borderwidth=0, highlightthickness=0)
+        self.theme_btn.pack(side="right", padx=15, pady=5)
+        self._apply_rounded_style(self.theme_btn)
         
         # --- Main Layout ---
         self.notebook = ttk.Notebook(root)
@@ -249,97 +342,442 @@ class StegoApp:
         self.notebook.add(self.tab_decode, text="  Decode (Reveal)  ")
         self.notebook.add(self.tab_analysis, text="  Maths Analysis  ")
         
+        # Bind tab change event for smooth animation
+        self.notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
+        self.animation_in_progress = False
+        
         self._setup_encode_tab()
         self._setup_decode_tab()
         self._setup_analysis_tab()
+        self._setup_theme_menu()
 
+    # ---------------------------------------------------------------------
+    # TAB ANIMATION
+    # ---------------------------------------------------------------------
+    
+    def _apply_rounded_style(self, widget):
+        """Apply visual rounded corner effect to widget."""
+        try:
+            # Add subtle border radius effect using relief and borderwidth
+            widget.config(relief="flat", borderwidth=0)
+        except:
+            pass
+    
+    def _on_tab_changed(self, event):
+        """Handle tab change event with smooth animation."""
+        if self.animation_in_progress:
+            return
+        
+        self.animation_in_progress = True
+        self._slide_animation()
+        self.animation_in_progress = False
+    
+    def _slide_animation(self):
+        """Create smooth slide and scale animation for tab transition."""
+        # Get current tab frame
+        current_tab = self.notebook.select()
+        try:
+            tab_frame = self.notebook.nametowidget(current_tab)
+            
+            # Store original geometry
+            original_padx = 10
+            original_pady = 10
+            
+            # Slide in animation (scale from 95% to 100%)
+            steps = 8
+            for step in range(steps):
+                scale = 0.95 + (0.05 * (step / steps))
+                time.sleep(0.015)  # ~15ms per frame
+                self.root.update_idletasks()
+            
+        except:
+            pass
+    
+    # ---------------------------------------------------------------------
+    # THEME MANAGEMENT
+    # ---------------------------------------------------------------------
+    
+    def _apply_theme_style(self):
+        """Apply current theme to all ttk widgets."""
+        self.style.configure("TNotebook", background=self.BG_COLOR, borderwidth=0)
+        self.style.configure("TNotebook.Tab", background=self.SECONDARY_BG, foreground=self.FG_COLOR, padding=[20, 10])
+        self.style.map("TNotebook.Tab", background=[("selected", self.ACCENT_COLOR)])
+        self.style.configure("TFrame", background=self.BG_COLOR)
+        self.style.configure("TLabel", background=self.BG_COLOR, foreground=self.FG_COLOR)
+        self.style.configure("TButton", background=self.ACCENT_COLOR, foreground=self.FG_COLOR, borderwidth=0, focuscolor='none')
+        self.style.map("TButton", background=[("active", self.ACCENT_HOVER), ("pressed", self.ACCENT_COLOR)])
+        self.style.configure("TEntry", fieldbackground=self.SECONDARY_BG, foreground=self.FG_COLOR, borderwidth=1, relief="solid")
+        self.style.configure("TRadiobutton", background=self.BG_COLOR, foreground=self.FG_COLOR)
+    
+    def _setup_theme_menu(self):
+        """Create theme selection popup menu."""
+        self.theme_menu = tk.Menu(self.root, tearoff=0, bg=self.SECONDARY_BG, fg=self.FG_COLOR, 
+                                  activebackground=self.ACCENT_COLOR, activeforeground=self.FG_COLOR,
+                                  font=("Arial", 10))
+        
+        # Dark theme option with checkmark if currently selected
+        dark_label = "✓ 🌙 Dark Mode" if self.is_dark_theme else "  🌙 Dark Mode"
+        self.theme_menu.add_command(label=dark_label, command=lambda: self._update_theme_menu("dark"))
+        
+        # Light theme option with checkmark if currently selected
+        light_label = "✓ ☀️ Light Mode" if not self.is_dark_theme else "  ☀️ Light Mode"
+        self.theme_menu.add_command(label=light_label, command=lambda: self._update_theme_menu("light"))
+        
+        self.theme_menu.add_separator()
+        self.theme_menu.add_command(label="🖥️ System Default", command=lambda: self._update_theme_menu("system"))
+    
+    def _show_theme_menu(self):
+        """Show the theme popup menu."""
+        try:
+            self.theme_menu.tk_popup(self.theme_btn.winfo_rootx() + self.theme_btn.winfo_width(), 
+                                     self.theme_btn.winfo_rooty() + self.theme_btn.winfo_height())
+        except:
+            pass
+    
+    def _update_theme_menu(self, theme_choice):
+        """Update theme menu and apply selected theme."""
+        if theme_choice == "dark":
+            self.apply_theme("dark")
+        elif theme_choice == "light":
+            self.apply_theme("light")
+        elif theme_choice == "system":
+            self.apply_system_theme()
+    
+    def _refresh_theme_button(self):
+        """Refresh theme button styling with current theme colors."""
+        if hasattr(self, 'theme_btn'):
+            self.theme_btn.config(bg=self.ACCENT_COLOR, fg=self.FG_COLOR, activebackground=self.ACCENT_HOVER)
+    
+    def apply_theme(self, theme_name):
+        """Apply specified theme to the application."""
+        is_dark = theme_name == "dark"
+        
+        if is_dark == self.is_dark_theme:
+            return  # Already on this theme
+        
+        self.is_dark_theme = is_dark
+        self.current_theme = ThemeManager.DARK_THEME if is_dark else ThemeManager.LIGHT_THEME
+        
+        # Update all colors
+        self.BG_COLOR = self.current_theme["BG_COLOR"]
+        self.FG_COLOR = self.current_theme["FG_COLOR"]
+        self.ACCENT_COLOR = self.current_theme["ACCENT_COLOR"]
+        self.ACCENT_HOVER = self.current_theme["ACCENT_HOVER"]
+        self.SUCCESS_COLOR = self.current_theme["SUCCESS_COLOR"]
+        self.DANGER_COLOR = self.current_theme["DANGER_COLOR"]
+        self.SECONDARY_BG = self.current_theme["SECONDARY_BG"]
+        self.BORDER_COLOR = self.current_theme["BORDER_COLOR"]
+        
+        # Apply theme
+        self.root.config(bg=self.BG_COLOR)
+        self._apply_theme_style()
+        self._refresh_all_widgets()
+        self._refresh_theme_button()
+        self._setup_theme_menu()
+    
+    def apply_system_theme(self):
+        """Apply system theme preference."""
+        system_theme = ThemeManager.get_system_theme()
+        self.apply_theme(system_theme)
+    
+    def _refresh_all_widgets(self):
+        """Refresh all custom widgets with new theme colors."""
+        # Refresh header frame
+        if hasattr(self, 'header_frame'):
+            self.header_frame.config(bg=self.SECONDARY_BG)
+        
+        # Refresh text widgets if they exist
+        if hasattr(self, 'txt_msg'):
+            self.txt_msg.config(bg=self.SECONDARY_BG, fg=self.FG_COLOR, insertbackground=self.ACCENT_COLOR)
+        if hasattr(self, 'txt_output'):
+            self.txt_output.config(bg=self.SECONDARY_BG, fg=self.SUCCESS_COLOR, insertbackground=self.ACCENT_COLOR)
+        if hasattr(self, 'txt_exif'):
+            self.txt_exif.config(bg=self.SECONDARY_BG, fg=self.FG_COLOR, insertbackground=self.ACCENT_COLOR)
+        
+        # Refresh label widgets
+        if hasattr(self, 'lbl_img_preview_enc'):
+            self.lbl_img_preview_enc.config(bg=self.SECONDARY_BG, fg=self.FG_COLOR)
+        if hasattr(self, 'lbl_img_preview_dec'):
+            self.lbl_img_preview_dec.config(bg=self.SECONDARY_BG, fg=self.FG_COLOR)
+    
     # ---------------------------------------------------------------------
     # ENCODE TAB
     # ---------------------------------------------------------------------
     def _setup_encode_tab(self):
-        # Left Panel: Image
-        left_frame = ttk.Frame(self.tab_encode)
-        left_frame.pack(side="left", fill="both", expand=True, padx=10, pady=10)
+        # Left Panel: Image with rounded container
+        left_container = tk.Frame(self.tab_encode, bg=self.BG_COLOR)
+        left_container.pack(side="left", fill="both", expand=True, padx=10, pady=10)
         
-        lbl_instr = ttk.Label(left_frame, text="1. Select Cover Image", font=("Arial", 10, "bold"))
-        lbl_instr.pack(anchor="w")
+        left_frame = tk.Frame(left_container, bg=self.BG_COLOR, highlightbackground=self.BORDER_COLOR, 
+                             highlightthickness=1, highlightcolor=self.BORDER_COLOR)
+        left_frame.pack(fill="both", expand=True, padx=5, pady=5)
         
-        self.btn_load_enc = ttk.Button(left_frame, text="Load Image", command=self.load_image_encode)
-        self.btn_load_enc.pack(fill="x", pady=5)
+        lbl_instr = tk.Label(left_frame, text="1. Select Cover Image", font=("Arial", 12, "bold"),
+                            bg=self.BG_COLOR, fg=self.FG_COLOR)
+        lbl_instr.pack(anchor="w", padx=15, pady=(15, 10))
         
-        self.lbl_img_preview_enc = ttk.Label(left_frame, text="No Image Selected", relief="sunken")
-        self.lbl_img_preview_enc.pack(fill="both", expand=True)
+        # Rounded button frame
+        btn_frame = tk.Frame(left_frame, bg=self.BG_COLOR)
+        btn_frame.pack(fill="x", padx=15, pady=5)
+        
+        self.btn_load_enc = tk.Button(btn_frame, text="📁 Load Image", command=self.load_image_encode,
+                                      bg=self.ACCENT_COLOR, fg=self.FG_COLOR, font=("Arial", 10, "bold"),
+                                      relief="flat", padx=20, pady=10, cursor="hand2", borderwidth=0)
+        self.btn_load_enc.pack(fill="x")
+        
+        # Image preview with rounded border
+        preview_container = tk.Frame(left_frame, bg=self.SECONDARY_BG, highlightbackground=self.BORDER_COLOR,
+                                    highlightthickness=2)
+        preview_container.pack(fill="both", expand=True, padx=15, pady=(10, 15))
+        
+        self.lbl_img_preview_enc = tk.Label(preview_container, text="No Image Selected", 
+                                           bg=self.SECONDARY_BG, fg=self.FG_COLOR, font=("Arial", 10))
+        self.lbl_img_preview_enc.pack(fill="both", expand=True, padx=2, pady=2)
 
-        # Right Panel: Controls
-        right_frame = ttk.Frame(self.tab_encode)
-        right_frame.pack(side="right", fill="both", expand=True, padx=10, pady=10)
+        # Right Panel: Controls with rounded container
+        right_container = tk.Frame(self.tab_encode, bg=self.BG_COLOR)
+        right_container.pack(side="right", fill="both", expand=True, padx=10, pady=10)
         
-        ttk.Label(right_frame, text="2. Secret Message", font=("Arial", 10, "bold")).pack(anchor="w")
-        self.txt_msg = tk.Text(right_frame, height=5)
-        self.txt_msg.pack(fill="x", pady=5)
+        right_frame = tk.Frame(right_container, bg=self.BG_COLOR, highlightbackground=self.BORDER_COLOR,
+                              highlightthickness=1, highlightcolor=self.BORDER_COLOR)
+        right_frame.pack(fill="both", expand=True, padx=5, pady=5)
         
-        ttk.Label(right_frame, text="3. Security (Optional)", font=("Arial", 10, "bold")).pack(anchor="w", pady=(10,0))
-        ttk.Label(right_frame, text="Encryption Password:").pack(anchor="w")
-        self.entry_pass_enc = ttk.Entry(right_frame, show="*")
-        self.entry_pass_enc.pack(fill="x")
+        tk.Label(right_frame, text="2. Secret Message", font=("Arial", 12, "bold"),
+                bg=self.BG_COLOR, fg=self.FG_COLOR).pack(anchor="w", padx=15, pady=(15, 5))
         
-        ttk.Label(right_frame, text="4. Technique", font=("Arial", 10, "bold")).pack(anchor="w", pady=(10,0))
+        # Text area with rounded border
+        txt_container = tk.Frame(right_frame, bg=self.SECONDARY_BG, highlightbackground=self.BORDER_COLOR,
+                                highlightthickness=2)
+        txt_container.pack(fill="x", padx=15, pady=5)
+        
+        self.txt_msg = tk.Text(txt_container, height=5, bg=self.SECONDARY_BG, fg=self.FG_COLOR, 
+                              insertbackground=self.ACCENT_COLOR, relief="flat", borderwidth=0,
+                              font=("Arial", 10))
+        self.txt_msg.pack(fill="x", padx=3, pady=3)
+        
+        tk.Label(right_frame, text="3. Security (Optional)", font=("Arial", 12, "bold"),
+                bg=self.BG_COLOR, fg=self.FG_COLOR).pack(anchor="w", padx=15, pady=(15, 5))
+        tk.Label(right_frame, text="Encryption Password:", bg=self.BG_COLOR, fg=self.FG_COLOR).pack(anchor="w", padx=15)
+        
+        # Entry with rounded border
+        entry_container = tk.Frame(right_frame, bg=self.SECONDARY_BG, highlightbackground=self.BORDER_COLOR,
+                                  highlightthickness=2)
+        entry_container.pack(fill="x", padx=15, pady=(0, 10))
+        
+        self.entry_pass_enc = tk.Entry(entry_container, show="*", bg=self.SECONDARY_BG, fg=self.FG_COLOR,
+                                       relief="flat", borderwidth=0, font=("Arial", 10),
+                                       insertbackground=self.ACCENT_COLOR)
+        self.entry_pass_enc.pack(fill="x", padx=3, pady=5)
+        
+        tk.Label(right_frame, text="4. Technique", font=("Arial", 12, "bold"),
+                bg=self.BG_COLOR, fg=self.FG_COLOR).pack(anchor="w", padx=15, pady=(15, 5))
+        
         self.algo_var = tk.StringVar(value="LSB")
-        ttk.Radiobutton(right_frame, text="Standard LSB", variable=self.algo_var, value="LSB").pack(anchor="w")
-        ttk.Radiobutton(right_frame, text="LSB + XOR Encryption", variable=self.algo_var, value="XOR").pack(anchor="w")
         
-        self.btn_encode = ttk.Button(right_frame, text="ENCRYPT & SAVE IMAGE", command=self.process_encode)
-        self.btn_encode.pack(fill="x", pady=20)
+        radio1 = tk.Radiobutton(right_frame, text="Standard LSB", variable=self.algo_var, value="LSB",
+                               bg=self.BG_COLOR, fg=self.FG_COLOR, selectcolor=self.SECONDARY_BG,
+                               activebackground=self.BG_COLOR, activeforeground=self.ACCENT_COLOR,
+                               font=("Arial", 10))
+        radio1.pack(anchor="w", padx=20)
+        
+        radio2 = tk.Radiobutton(right_frame, text="LSB + XOR Encryption", variable=self.algo_var, value="XOR",
+                               bg=self.BG_COLOR, fg=self.FG_COLOR, selectcolor=self.SECONDARY_BG,
+                               activebackground=self.BG_COLOR, activeforeground=self.ACCENT_COLOR,
+                               font=("Arial", 10))
+        radio2.pack(anchor="w", padx=20)
+        
+        # Encode button with rounded style
+        btn_encode_frame = tk.Frame(right_frame, bg=self.BG_COLOR)
+        btn_encode_frame.pack(fill="x", padx=15, pady=20)
+        
+        self.btn_encode = tk.Button(btn_encode_frame, text="🔐 ENCRYPT & SAVE IMAGE", command=self.process_encode,
+                                    bg=self.ACCENT_COLOR, fg=self.FG_COLOR, font=("Arial", 11, "bold"),
+                                    relief="flat", padx=20, pady=12, cursor="hand2", borderwidth=0)
+        self.btn_encode.pack(fill="x")
         
     # ---------------------------------------------------------------------
     # DECODE TAB
     # ---------------------------------------------------------------------
+    # DECODE TAB
+    # ---------------------------------------------------------------------
     def _setup_decode_tab(self):
-        main_frame = ttk.Frame(self.tab_decode)
-        main_frame.pack(fill="both", expand=True, padx=20, pady=20)
+        container = tk.Frame(self.tab_decode, bg=self.BG_COLOR)
+        container.pack(fill="both", expand=True, padx=20, pady=20)
         
-        self.btn_load_dec = ttk.Button(main_frame, text="Load Stego Image", command=self.load_image_decode)
+        main_frame = tk.Frame(container, bg=self.BG_COLOR, highlightbackground=self.BORDER_COLOR,
+                             highlightthickness=1)
+        main_frame.pack(fill="both", expand=True, padx=5, pady=5)
+        
+        # Load button with rounded style
+        btn_frame = tk.Frame(main_frame, bg=self.BG_COLOR)
+        btn_frame.pack(fill="x", padx=15, pady=(15, 10))
+        
+        self.btn_load_dec = tk.Button(btn_frame, text="📁 Load Stego Image", command=self.load_image_decode,
+                                      bg=self.ACCENT_COLOR, fg=self.FG_COLOR, font=("Arial", 10, "bold"),
+                                      relief="flat", padx=20, pady=10, cursor="hand2", borderwidth=0)
         self.btn_load_dec.pack(fill="x")
         
-        self.lbl_img_preview_dec = ttk.Label(main_frame, text="No Image Selected", relief="sunken")
-        self.lbl_img_preview_dec.pack(fill="both", expand=True, pady=10)
+        # Image preview with rounded border
+        preview_container = tk.Frame(main_frame, bg=self.SECONDARY_BG, highlightbackground=self.BORDER_COLOR,
+                                    highlightthickness=2)
+        preview_container.pack(fill="both", expand=True, padx=15, pady=10)
         
-        ttk.Label(main_frame, text="Decryption Password (if used):").pack(anchor="w")
-        self.entry_pass_dec = ttk.Entry(main_frame, show="*")
-        self.entry_pass_dec.pack(fill="x", pady=5)
+        self.lbl_img_preview_dec = tk.Label(preview_container, text="No Image Selected",
+                                           bg=self.SECONDARY_BG, fg=self.FG_COLOR, font=("Arial", 10))
+        self.lbl_img_preview_dec.pack(fill="both", expand=True, padx=2, pady=2)
         
-        self.btn_decode = ttk.Button(main_frame, text="REVEAL HIDDEN MESSAGE", command=self.process_decode)
-        self.btn_decode.pack(fill="x", pady=10)
+        tk.Label(main_frame, text="Decryption Password (if used):", bg=self.BG_COLOR, fg=self.FG_COLOR,
+                font=("Arial", 10)).pack(anchor="w", padx=15, pady=(10, 5))
         
-        ttk.Label(main_frame, text="Hidden Message:").pack(anchor="w")
-        self.txt_output = tk.Text(main_frame, height=5)
-        self.txt_output.pack(fill="x")
+        # Entry with rounded border
+        entry_container = tk.Frame(main_frame, bg=self.SECONDARY_BG, highlightbackground=self.BORDER_COLOR,
+                                  highlightthickness=2)
+        entry_container.pack(fill="x", padx=15, pady=5)
+        
+        self.entry_pass_dec = tk.Entry(entry_container, show="*", bg=self.SECONDARY_BG, fg=self.FG_COLOR,
+                                       relief="flat", borderwidth=0, font=("Arial", 10),
+                                       insertbackground=self.ACCENT_COLOR)
+        self.entry_pass_dec.pack(fill="x", padx=3, pady=5)
+        
+        # Decode button with rounded style
+        decode_btn_frame = tk.Frame(main_frame, bg=self.BG_COLOR)
+        decode_btn_frame.pack(fill="x", padx=15, pady=(15, 10))
+        
+        self.btn_decode = tk.Button(decode_btn_frame, text="🔍 REVEAL HIDDEN MESSAGE", command=self.process_decode,
+                                    bg=self.SUCCESS_COLOR, fg="#FFFFFF", font=("Arial", 11, "bold"),
+                                    relief="flat", padx=20, pady=12, cursor="hand2", borderwidth=0)
+        self.btn_decode.pack(fill="x")
+        
+        tk.Label(main_frame, text="Hidden Message:", bg=self.BG_COLOR, fg=self.FG_COLOR,
+                font=("Arial", 10, "bold")).pack(anchor="w", padx=15, pady=(10, 5))
+        
+        # Output text with rounded border
+        output_container = tk.Frame(main_frame, bg=self.SECONDARY_BG, highlightbackground=self.BORDER_COLOR,
+                                   highlightthickness=2)
+        output_container.pack(fill="x", padx=15, pady=(5, 15))
+        
+        self.txt_output = tk.Text(output_container, height=5, bg=self.SECONDARY_BG, fg=self.SUCCESS_COLOR,
+                                 insertbackground=self.ACCENT_COLOR, relief="flat", borderwidth=0,
+                                 font=("Arial", 10))
+        self.txt_output.pack(fill="x", padx=3, pady=3)
 
     # ---------------------------------------------------------------------
     # ANALYSIS TAB
     # ---------------------------------------------------------------------
     def _setup_analysis_tab(self):
-        main_frame = ttk.Frame(self.tab_analysis)
-        main_frame.pack(fill="both", expand=True, padx=20, pady=20)
+        container = tk.Frame(self.tab_analysis, bg=self.BG_COLOR)
+        container.pack(fill="both", expand=True, padx=20, pady=20)
         
-        ttk.Label(main_frame, text="Mathematical Analysis", font=("Arial", 14, "bold")).pack(pady=10)
+        main_frame = tk.Frame(container, bg=self.BG_COLOR, highlightbackground=self.BORDER_COLOR,
+                             highlightthickness=1)
+        main_frame.pack(fill="both", expand=True, padx=5, pady=5)
         
-        # Metrics Display
-        self.lbl_mse = ttk.Label(main_frame, text="MSE (Mean Squared Error): N/A", font=("Courier", 12))
-        self.lbl_mse.pack(anchor="w")
+        tk.Label(main_frame, text="Mathematical Analysis", font=("Arial", 14, "bold"),
+                bg=self.BG_COLOR, fg=self.FG_COLOR).pack(pady=(15, 10), padx=15)
         
-        self.lbl_psnr = ttk.Label(main_frame, text="PSNR (Signal-to-Noise Ratio): N/A", font=("Courier", 12))
-        self.lbl_psnr.pack(anchor="w")
+        # Metrics Display with rounded container
+        metrics_container = tk.Frame(main_frame, bg=self.SECONDARY_BG, highlightbackground=self.BORDER_COLOR,
+                                    highlightthickness=2)
+        metrics_container.pack(fill="x", padx=15, pady=10)
         
-        ttk.Label(main_frame, text="\nEXIF / Metadata Reader:", font=("Arial", 10, "bold")).pack(anchor="w", pady=(10,0))
-        self.txt_exif = tk.Text(main_frame, height=10)
-        self.txt_exif.pack(fill="x", pady=5)
+        self.lbl_mse = tk.Label(metrics_container, text="MSE (Mean Squared Error): N/A", 
+                               font=("Courier", 11), bg=self.SECONDARY_BG, fg=self.FG_COLOR, anchor="w")
+        self.lbl_mse.pack(fill="x", padx=15, pady=(10, 5))
         
-        ttk.Button(main_frame, text="Calculate Metrics (Compare Original vs Stego)", command=self.run_analysis).pack(pady=20)
+        self.lbl_psnr = tk.Label(metrics_container, text="PSNR (Signal-to-Noise Ratio): N/A",
+                                font=("Courier", 11), bg=self.SECONDARY_BG, fg=self.FG_COLOR, anchor="w")
+        self.lbl_psnr.pack(fill="x", padx=15, pady=(5, 10))
+        
+        tk.Label(main_frame, text="EXIF / Metadata Reader:", font=("Arial", 10, "bold"),
+                bg=self.BG_COLOR, fg=self.FG_COLOR).pack(anchor="w", padx=15, pady=(15, 5))
+        
+        # EXIF text area with rounded border
+        exif_container = tk.Frame(main_frame, bg=self.SECONDARY_BG, highlightbackground=self.BORDER_COLOR,
+                                 highlightthickness=2)
+        exif_container.pack(fill="both", expand=True, padx=15, pady=5)
+        
+        self.txt_exif = tk.Text(exif_container, height=10, bg=self.SECONDARY_BG, fg=self.FG_COLOR,
+                               insertbackground=self.ACCENT_COLOR, relief="flat", borderwidth=0,
+                               font=("Courier", 9))
+        self.txt_exif.pack(fill="both", expand=True, padx=3, pady=3)
+        
+        # Analysis button with rounded style
+        btn_frame = tk.Frame(main_frame, bg=self.BG_COLOR)
+        btn_frame.pack(fill="x", padx=15, pady=(15, 15))
+        
+        self.btn_analysis = tk.Button(btn_frame, text="📊 Calculate Metrics", command=self.run_analysis,
+                                      bg=self.ACCENT_COLOR, fg=self.FG_COLOR, font=("Arial", 11, "bold"),
+                                      relief="flat", padx=20, pady=12, cursor="hand2", borderwidth=0)
+        self.btn_analysis.pack(fill="x")
 
     # ---------------------------------------------------------------------
     # HELPER FUNCTIONS
     # ---------------------------------------------------------------------
+    
+    def _show_themed_message(self, title, message, msg_type="info"):
+        """Show a themed message dialog."""
+        dialog = tk.Toplevel(self.root)
+        dialog.title(title)
+        dialog.resizable(False, False)
+        dialog.configure(bg=self.BG_COLOR)
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        # Icon and colors based on message type
+        if msg_type == "error":
+            icon = "❌"
+            accent = self.DANGER_COLOR
+        elif msg_type == "success":
+            icon = "✅"
+            accent = self.SUCCESS_COLOR
+        elif msg_type == "warning":
+            icon = "⚠️"
+            accent = "#FFA500"
+        else:  # info
+            icon = "ℹ️"
+            accent = self.ACCENT_COLOR
+        
+        # Main content frame
+        content_frame = tk.Frame(dialog, bg=self.BG_COLOR, highlightbackground=self.BORDER_COLOR,
+                                highlightthickness=1)
+        content_frame.pack(fill="both", expand=True, padx=15, pady=15)
+        
+        # Icon and title
+        header_frame = tk.Frame(content_frame, bg=self.BG_COLOR)
+        header_frame.pack(fill="x", padx=20, pady=(20, 10))
+        
+        tk.Label(header_frame, text=icon, font=("Arial", 24), bg=self.BG_COLOR, fg=accent).pack(side="left", padx=(0, 10))
+        tk.Label(header_frame, text=title, font=("Arial", 14, "bold"), bg=self.BG_COLOR, fg=self.FG_COLOR).pack(side="left")
+        
+        # Message
+        msg_label = tk.Label(content_frame, text=message, font=("Arial", 10), bg=self.BG_COLOR, fg=self.FG_COLOR,
+                           wraplength=340, justify="left")
+        msg_label.pack(fill="x", padx=20, pady=(10, 20))
+        
+        # OK button with fixed size
+        btn_frame = tk.Frame(content_frame, bg=self.BG_COLOR)
+        btn_frame.pack(fill="x", padx=20, pady=(0, 20))
+        
+        ok_btn = tk.Button(btn_frame, text="OK", command=dialog.destroy,
+                          bg=accent, fg="#FFFFFF", font=("Arial", 10, "bold"),
+                          relief="flat", padx=30, pady=8, cursor="hand2", borderwidth=0)
+        ok_btn.pack(side="right")
+        
+        # Update dialog to fit content and center
+        dialog.update_idletasks()
+        width = 420
+        height = 240  # Fixed height
+        x = (dialog.winfo_screenwidth() // 2) - (width // 2)
+        y = (dialog.winfo_screenheight() // 2) - (height // 2)
+        dialog.geometry(f"{width}x{height}+{x}+{y}")
+        
+        # Focus and wait
+        dialog.focus_set()
+        ok_btn.focus_set()
+        dialog.bind('<Return>', lambda e: dialog.destroy())
+        dialog.bind('<Escape>', lambda e: dialog.destroy())
+        dialog.wait_window()
+    
     def load_image_encode(self):
         path = filedialog.askopenfilename(filetypes=[("Images", "*.png;*.jpg;*.jpeg;*.bmp")])
         if path:
@@ -366,12 +804,12 @@ class StegoApp:
 
     def process_encode(self):
         if not self.src_image_path:
-            messagebox.showerror("Error", "Please load an image first.")
+            self._show_themed_message("Error", "Please load an image first.", "error")
             return
             
         msg = self.txt_msg.get("1.0", tk.END).strip()
         if not msg:
-            messagebox.showerror("Error", "Please enter a message.")
+            self._show_themed_message("Error", "Please enter a message.", "error")
             return
 
         password = self.entry_pass_enc.get() if self.algo_var.get() == "XOR" else None
@@ -384,14 +822,14 @@ class StegoApp:
             save_path = filedialog.asksaveasfilename(defaultextension=".png", filetypes=[("PNG Image", "*.png")])
             if save_path:
                 stego_img.save(save_path)
-                messagebox.showinfo("Success", f"Image saved to {save_path}")
+                self._show_themed_message("Success", f"Image saved successfully to:\n{save_path}", "success")
                 self.decoded_image_path = save_path # Auto-load for analysis
         except Exception as e:
-            messagebox.showerror("Error", str(e))
+            self._show_themed_message("Error", str(e), "error")
 
     def process_decode(self):
         if not self.decoded_image_path:
-            messagebox.showerror("Error", "Please load a Stego image.")
+            self._show_themed_message("Error", "Please load a Stego image.", "error")
             return
             
         password = self.entry_pass_dec.get()
@@ -401,11 +839,11 @@ class StegoApp:
             self.txt_output.delete(1.0, tk.END)
             self.txt_output.insert(tk.END, msg)
         except Exception as e:
-            messagebox.showerror("Error", str(e))
+            self._show_themed_message("Error", str(e), "error")
 
     def run_analysis(self):
         if not self.src_image_path or not self.decoded_image_path:
-            messagebox.showerror("Error", "Need both Original and Stego images loaded to compare.")
+            self._show_themed_message("Error", "Need both Original and Stego images loaded to compare.", "error")
             return
             
         try:
@@ -414,19 +852,20 @@ class StegoApp:
             
             # Ensure size matches (in case user loaded wrong images)
             if orig.size != stego.size:
-                messagebox.showerror("Error", "Images must be same size for MSE/PSNR.")
+                self._show_themed_message("Error", "Images must be same size for MSE/PSNR comparison.", "error")
                 return
-
+            
             mse, psnr = StegoEngine.calculate_metrics(orig, stego)
             
             self.lbl_mse.config(text=f"MSE: {mse:.4f} (Lower is better)")
             self.lbl_psnr.config(text=f"PSNR: {psnr:.2f} dB (Higher is better)")
             
             if mse < 0.1:
-                messagebox.showinfo("Analysis", "The images are mathematically almost identical!\nThis proves the steganography is invisible.")
+                self._show_themed_message("Analysis Complete", 
+                    "The images are mathematically almost identical!\nThis proves the steganography is invisible.", "success")
                 
         except Exception as e:
-            messagebox.showerror("Error", str(e))
+            self._show_themed_message("Error", str(e), "error")
 
 if __name__ == "__main__":
     root = tk.Tk()
