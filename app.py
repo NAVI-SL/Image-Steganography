@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog
-from PIL import Image, ImageTk, ExifTags
-import numpy as np
+from PIL import Image, ImageTk, ExifTags # type: ignore
+import numpy as np # type: ignore
 import math
 import os
 import random
@@ -288,10 +288,9 @@ class StegoApp:
         self.root.title("CyberMaths Steganography Tool")
         self.root.geometry("900x650")
         
-        # Detect and set system theme
-        system_theme = ThemeManager.get_system_theme()
-        self.is_dark_theme = system_theme == "dark"
-        self.current_theme = ThemeManager.DARK_THEME if self.is_dark_theme else ThemeManager.LIGHT_THEME
+        # Force dark theme for a consistent look
+        self.is_dark_theme = True
+        self.current_theme = ThemeManager.DARK_THEME
         
         # Set colors from theme
         self.BG_COLOR = self.current_theme["BG_COLOR"]
@@ -316,19 +315,6 @@ class StegoApp:
         self.stego_image_object = None
         self.decoded_image_path = None
         
-        # --- Top Header with Theme Button ---
-        self.header_frame = tk.Frame(root, bg=self.SECONDARY_BG, height=40, highlightthickness=0)
-        self.header_frame.pack(fill="x", padx=0, pady=0)
-        self.header_frame.pack_propagate(False)
-        
-        # Theme button on the right with rounded appearance
-        self.theme_btn = tk.Button(self.header_frame, text="🎨 Theme", command=self._show_theme_menu, 
-                                   bg=self.ACCENT_COLOR, fg=self.FG_COLOR, font=("Arial", 10, "bold"),
-                                   relief="flat", padx=20, pady=10, cursor="hand2",
-                                   borderwidth=0, highlightthickness=0)
-        self.theme_btn.pack(side="right", padx=15, pady=5)
-        self._apply_rounded_style(self.theme_btn)
-        
         # --- Main Layout ---
         self.notebook = ttk.Notebook(root)
         self.notebook.pack(fill='both', expand=True, padx=10, pady=10)
@@ -349,7 +335,6 @@ class StegoApp:
         self._setup_encode_tab()
         self._setup_decode_tab()
         self._setup_analysis_tab()
-        self._setup_theme_menu()
 
     # ---------------------------------------------------------------------
     # TAB ANIMATION
@@ -362,6 +347,20 @@ class StegoApp:
             widget.config(relief="flat", borderwidth=0)
         except:
             pass
+
+    def _style_button(self, button, kind="accent"):
+        """Give buttons a cleaner, modern look with hover feedback."""
+        palette = {
+            "accent": (self.ACCENT_COLOR, self.ACCENT_HOVER, self.FG_COLOR),
+            "success": (self.SUCCESS_COLOR, "#45c557", "#FFFFFF"),
+            "danger": (self.DANGER_COLOR, "#ff6b6b", "#FFFFFF")
+        }
+        normal, hover, fg = palette.get(kind, palette["accent"])
+        button.configure(bg=normal, fg=fg, activebackground=hover, activeforeground=fg,
+                         relief="flat", borderwidth=0, highlightthickness=0,
+                         padx=14, pady=10, cursor="hand2", font=("Segoe UI Semibold", 10))
+        button.bind("<Enter>", lambda _e, b=button, c=hover: b.config(bg=c))
+        button.bind("<Leave>", lambda _e, b=button, c=normal: b.config(bg=c))
     
     def _on_tab_changed(self, event):
         """Handle tab change event with smooth animation."""
@@ -409,54 +408,10 @@ class StegoApp:
         self.style.configure("TEntry", fieldbackground=self.SECONDARY_BG, foreground=self.FG_COLOR, borderwidth=1, relief="solid")
         self.style.configure("TRadiobutton", background=self.BG_COLOR, foreground=self.FG_COLOR)
     
-    def _setup_theme_menu(self):
-        """Create theme selection popup menu."""
-        self.theme_menu = tk.Menu(self.root, tearoff=0, bg=self.SECONDARY_BG, fg=self.FG_COLOR, 
-                                  activebackground=self.ACCENT_COLOR, activeforeground=self.FG_COLOR,
-                                  font=("Arial", 10))
-        
-        # Dark theme option with checkmark if currently selected
-        dark_label = "✓ 🌙 Dark Mode" if self.is_dark_theme else "  🌙 Dark Mode"
-        self.theme_menu.add_command(label=dark_label, command=lambda: self._update_theme_menu("dark"))
-        
-        # Light theme option with checkmark if currently selected
-        light_label = "✓ ☀️ Light Mode" if not self.is_dark_theme else "  ☀️ Light Mode"
-        self.theme_menu.add_command(label=light_label, command=lambda: self._update_theme_menu("light"))
-        
-        self.theme_menu.add_separator()
-        self.theme_menu.add_command(label="🖥️ System Default", command=lambda: self._update_theme_menu("system"))
-    
-    def _show_theme_menu(self):
-        """Show the theme popup menu."""
-        try:
-            self.theme_menu.tk_popup(self.theme_btn.winfo_rootx() + self.theme_btn.winfo_width(), 
-                                     self.theme_btn.winfo_rooty() + self.theme_btn.winfo_height())
-        except:
-            pass
-    
-    def _update_theme_menu(self, theme_choice):
-        """Update theme menu and apply selected theme."""
-        if theme_choice == "dark":
-            self.apply_theme("dark")
-        elif theme_choice == "light":
-            self.apply_theme("light")
-        elif theme_choice == "system":
-            self.apply_system_theme()
-    
-    def _refresh_theme_button(self):
-        """Refresh theme button styling with current theme colors."""
-        if hasattr(self, 'theme_btn'):
-            self.theme_btn.config(bg=self.ACCENT_COLOR, fg=self.FG_COLOR, activebackground=self.ACCENT_HOVER)
-    
-    def apply_theme(self, theme_name):
-        """Apply specified theme to the application."""
-        is_dark = theme_name == "dark"
-        
-        if is_dark == self.is_dark_theme:
-            return  # Already on this theme
-        
-        self.is_dark_theme = is_dark
-        self.current_theme = ThemeManager.DARK_THEME if is_dark else ThemeManager.LIGHT_THEME
+    def apply_theme(self, theme_name=None):
+        """Apply dark theme to the application."""
+        self.is_dark_theme = True
+        self.current_theme = ThemeManager.DARK_THEME
         
         # Update all colors
         self.BG_COLOR = self.current_theme["BG_COLOR"]
@@ -472,13 +427,10 @@ class StegoApp:
         self.root.config(bg=self.BG_COLOR)
         self._apply_theme_style()
         self._refresh_all_widgets()
-        self._refresh_theme_button()
-        self._setup_theme_menu()
     
     def apply_system_theme(self):
-        """Apply system theme preference."""
-        system_theme = ThemeManager.get_system_theme()
-        self.apply_theme(system_theme)
+        """Always use dark theme, ignoring system preference."""
+        self.apply_theme("dark")
     
     def _refresh_all_widgets(self):
         """Refresh all custom widgets with new theme colors."""
@@ -520,9 +472,8 @@ class StegoApp:
         btn_frame = tk.Frame(left_frame, bg=self.BG_COLOR)
         btn_frame.pack(fill="x", padx=15, pady=5)
         
-        self.btn_load_enc = tk.Button(btn_frame, text="📁 Load Image", command=self.load_image_encode,
-                                      bg=self.ACCENT_COLOR, fg=self.FG_COLOR, font=("Arial", 10, "bold"),
-                                      relief="flat", padx=20, pady=10, cursor="hand2", borderwidth=0)
+        self.btn_load_enc = tk.Button(btn_frame, text="📁 Load Image", command=self.load_image_encode)
+        self._style_button(self.btn_load_enc, "accent")
         self.btn_load_enc.pack(fill="x")
         
         # Image preview with rounded border
@@ -590,9 +541,9 @@ class StegoApp:
         btn_encode_frame = tk.Frame(right_frame, bg=self.BG_COLOR)
         btn_encode_frame.pack(fill="x", padx=15, pady=20)
         
-        self.btn_encode = tk.Button(btn_encode_frame, text="🔐 ENCRYPT & SAVE IMAGE", command=self.process_encode,
-                                    bg=self.ACCENT_COLOR, fg=self.FG_COLOR, font=("Arial", 11, "bold"),
-                                    relief="flat", padx=20, pady=12, cursor="hand2", borderwidth=0)
+        self.btn_encode = tk.Button(btn_encode_frame, text="🔐 ENCRYPT & SAVE IMAGE", command=self.process_encode)
+        self._style_button(self.btn_encode, "accent")
+        self.btn_encode.config(font=("Segoe UI Semibold", 11))
         self.btn_encode.pack(fill="x")
         
     # ---------------------------------------------------------------------
@@ -612,9 +563,8 @@ class StegoApp:
         btn_frame = tk.Frame(main_frame, bg=self.BG_COLOR)
         btn_frame.pack(fill="x", padx=15, pady=(15, 10))
         
-        self.btn_load_dec = tk.Button(btn_frame, text="📁 Load Stego Image", command=self.load_image_decode,
-                                      bg=self.ACCENT_COLOR, fg=self.FG_COLOR, font=("Arial", 10, "bold"),
-                                      relief="flat", padx=20, pady=10, cursor="hand2", borderwidth=0)
+        self.btn_load_dec = tk.Button(btn_frame, text="📁 Load Stego Image", command=self.load_image_decode)
+        self._style_button(self.btn_load_dec, "accent")
         self.btn_load_dec.pack(fill="x")
         
         # Image preview with rounded border
@@ -643,9 +593,9 @@ class StegoApp:
         decode_btn_frame = tk.Frame(main_frame, bg=self.BG_COLOR)
         decode_btn_frame.pack(fill="x", padx=15, pady=(15, 10))
         
-        self.btn_decode = tk.Button(decode_btn_frame, text="🔍 REVEAL HIDDEN MESSAGE", command=self.process_decode,
-                                    bg=self.SUCCESS_COLOR, fg="#FFFFFF", font=("Arial", 11, "bold"),
-                                    relief="flat", padx=20, pady=12, cursor="hand2", borderwidth=0)
+        self.btn_decode = tk.Button(decode_btn_frame, text="🔍 REVEAL HIDDEN MESSAGE", command=self.process_decode)
+        self._style_button(self.btn_decode, "success")
+        self.btn_decode.config(font=("Segoe UI Semibold", 11))
         self.btn_decode.pack(fill="x")
         
         tk.Label(main_frame, text="Hidden Message:", bg=self.BG_COLOR, fg=self.FG_COLOR,
@@ -705,9 +655,9 @@ class StegoApp:
         btn_frame = tk.Frame(main_frame, bg=self.BG_COLOR)
         btn_frame.pack(fill="x", padx=15, pady=(15, 15))
         
-        self.btn_analysis = tk.Button(btn_frame, text="📊 Calculate Metrics", command=self.run_analysis,
-                                      bg=self.ACCENT_COLOR, fg=self.FG_COLOR, font=("Arial", 11, "bold"),
-                                      relief="flat", padx=20, pady=12, cursor="hand2", borderwidth=0)
+        self.btn_analysis = tk.Button(btn_frame, text="📊 Calculate Metrics", command=self.run_analysis)
+        self._style_button(self.btn_analysis, "accent")
+        self.btn_analysis.config(font=("Segoe UI Semibold", 11))
         self.btn_analysis.pack(fill="x")
 
     # ---------------------------------------------------------------------
