@@ -11,9 +11,6 @@
 - [Installation](#installation)
 - [Usage](#usage)
 - [GUI Overview](#gui-overview)
-- [API / Key Classes & Functions](#api--key-classes--functions)
-- [Limitations & Notes](#limitations--notes)
-- [License](#license)
 - [Acknowledgements](#acknowledgements)
 
 ---
@@ -104,44 +101,11 @@ python app.py
 
 ---
 
-## API / Key Classes & Functions
-
-### `StegoEngine` (backend)
-- `to_binary(data)`: Convert strings/bytes/ints to 8-bit binary strings.
-- `encode_lsb(image_path, message, password=None) -> PIL.Image`: Embed message into image LSBs. Appends sentinel `$$STOP$$`. If password provided, XOR-encrypts message first.
-- `decode_lsb(image_path, password=None) -> str`: Read LSBs, assemble bytes until sentinel; XOR-decrypts if password provided.
-- `calculate_metrics(original_img, stego_img) -> (mse, psnr)`: Returns MSE and PSNR.
-- `xor_encrypt(message, key) -> str`: Symmetric XOR-based string obfuscation.
-- `get_exif_data(image_path) -> str`: Returns a formatted string with basic file system metadata and image properties (width, height, format, dpi, EXIF tags when present).
-
-### `StegoApp` (frontend)
-- `load_image_encode()`, `load_image_decode()`: file pickers and preview loaders.
-- `process_encode()`: orchestrates encoding and saving the stego image.
-- `process_decode()`: orchestrates decoding and displaying the hidden message.
-- `run_analysis()`: computes and displays MSE / PSNR between original and stego images.
-- Theme and UI helpers for styling and dialogs.
-
----
-
-## Limitations & Notes
-- **Not secure for real secrets**: The XOR cipher is educational and not suitable for protecting sensitive information. For stronger confidentiality use AES/GCM or authenticated encryption libraries.
-- **Image formats**: JPEG recompression can destroy embedded LSB data. Save stego outputs as PNG to preserve bits.
-- **Capacity**: The maximum embeddable data equals the total number of bytes in the image array (width × height × channels). The app checks capacity and raises an error if the message does not fit.
-- **Performance**: Very large messages or very high-resolution images may be slower and memory intensive. The encode/decode logic flattens the entire image array; optimizations can be applied if needed.
-- **EXIF**: The EXIF reader is informational and intentionally simple; it does not replicate all `exiftool` features.
-
----
-
 ## Contributing
 Contributions, bug reports, and improvements are welcome. Suggested improvements:
 - Replace XOR with standard authenticated encryption (e.g., AES-GCM) for confidentiality.
 - Add adaptive embedding (randomized LSB positions using a PRNG keyed by password) to improve stealth.
 - Support embedding binary files (images/documents) by using a length-prefix + sentinel scheme.
-
----
-
-## License
-This project is released under MIT-style permissive terms.
 
 ---
 
